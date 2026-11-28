@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Basketball quarter dashboard</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --panel: #f3f2ef; --line: #dcdad4; --text: #0b0b0b; --muted: #52514e;
+  --s1: #2a78d6; --s2: #eb6834; --good: #0f7a3a; --bad: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --surface: #1a1a19; --panel: #242422; --line: #3a3935; --text: #f0efec;
+          --muted: #c3c2b7; --s1: #3987e5; --s2: #d95926; --good: #4cc27a; --bad: #e66767; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { padding: 14px 20px 0; display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: end; border-bottom: 1px solid var(--line); }
+h1 { font-size: 18px; margin: 0 0 12px; font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.global { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 12px auto; align-items: end; }
+label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+select, input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; min-width: 0; }
+input[type=checkbox] { width: auto; }
+label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+nav { width: 100%; display: flex; gap: 2px; flex-wrap: wrap; }
+nav button { font: inherit; border: 0; background: none; color: var(--muted); padding: 8px 14px; border-bottom: 2px solid transparent; cursor: pointer; }
+nav .display { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; color: var(--muted); padding: 0 2px; }
+nav .display span { font-weight: 600; }
+nav button[aria-selected=true] { color: var(--text); border-bottom-color: var(--s1); font-weight: 600; }
+main { padding: 16px 20px 40px; max-width: 1400px; }
+section[hidden] { display: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; margin-bottom: 12px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.tile b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 12px; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+.tablewrap { overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 9px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { position: sticky; top: 0; background: var(--panel); cursor: pointer; font-weight: 600; font-size: 12px; user-select: none; }
+th:first-child, td:first-child { text-align: left; }
+td.l, th.l { text-align: left; }
+tr:hover td { background: var(--panel); }
+.note { color: var(--muted); font-size: 12px; margin: 6px 0 12px; max-width: 900px; }
+.warn { border-left: 3px solid var(--s2); padding: 6px 10px; background: var(--panel); margin: 8px 0; font-size: 13px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
+.chart { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; position: relative; }
+.chart h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.chart svg { width: 100%; height: auto; display: block; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#tip { position: fixed; pointer-events: none; background: var(--text); color: var(--surface); padding: 4px 8px; border-radius: 6px; font-size: 12px; display: none; z-index: 10; white-space: nowrap; }
+button.act { font: inherit; background: var(--s1); color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button.sec { font: inherit; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+#report { max-width: 900px; }
+#report .tablewrap { overflow: visible; max-height: none; }
+#report table { font-size: 11px; } #report th, #report td { padding: 3px 5px; }
+#report h2 { font-size: 20px; } #report h3 { font-size: 15px; margin: 18px 0 6px; }
+@media print {
+  header, nav, .no-print, section:not(#tab-report) { display: none !important; }
+  #tab-report { display: block !important; }
+  body { background: #fff; color: #000; } main { padding: 0; }
+  .tablewrap { max-height: none; overflow: visible; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Basketball quarter dashboard</h1>
+    <div class="meta" id="meta">Loading…</div>
+  </div>
+  <div class="global no-print">
+    <label>Data
+      <select id="g-source">
+        <option value="history">History (results, all leagues)</option>
+        <option value="odds">Bet365 prices (from Nov 2026)</option>
+      </select>
+    </label>
+    <label>Quarter
+      <select id="g-q"><option value="1">First quarter</option><option value="2">Second quarter</option><option value="3">Third quarter</option><option value="4">Fourth quarter</option></select>
+    </label>
+    <label>Test period starts
+      <input type="date" id="g-split" title="Games before this date are 'before', games on or after are 'after'. Use it to pick on one period and test on the other.">
+    </label>
+  </div>
+  <nav id="tabs" class="no-print" role="tablist">
+    <button data-tab="today" aria-selected="true">Today's picks</button>
+    <button data-tab="chase" aria-selected="false">Progressive wager</button>
+    <button data-tab="board" aria-selected="false">Board</button>
+    <button data-tab="leagues" aria-selected="false">Leagues</button>
+    <button data-tab="teams" aria-selected="false">Teams</button>
+    <button data-tab="strategy" aria-selected="false">Strategy</button>
+    <button data-tab="games" aria-selected="false">Game selector</button>
+    <button data-tab="report" aria-selected="false">Report</button>
+    <button data-tab="jeff" aria-selected="false">Jeffs comment</button>
+    <div class="display no-print">
+      <span>Odds</span>
+      <label class="check"><input type="radio" name="fmt-odds" value="dec" checked> European (decimal)</label>
+      <label class="check"><input type="radio" name="fmt-odds" value="us"> US (American)</label>
+      <span>Currency</span>
+      <label class="check"><input type="radio" name="fmt-cur" value="units" checked> Units</label>
+      <label class="check"><input type="radio" name="fmt-cur" value="usd"> US dollar ($)</label>
+      <label class="check"><input type="radio" name="fmt-cur" value="eur"> Euro (&euro;)</label>
+    </div>
+  </nav>
+</header>
+<main>
+  <section id="tab-today">
+    <div class="controls" id="p-types">
+      <b>Game type</b>
+      <label class="check"><input type="radio" name="ptype" value="all" checked> All types</label>
+      <label class="check"><input type="radio" name="ptype" value="q"> Quarter</label>
+      <label class="check"><input type="radio" name="ptype" value="h1"> Half</label>
+      <label class="check"><input type="radio" name="ptype" value="total"> Over/under</label>
+      <label class="check"><input type="radio" name="ptype" value="ml"> Full game</label>
+      <label class="check" title="Tracked beside the live slate from 2026-11-21: every market, each block keeps its 4 best by value and recommends its 2 likeliest winners."><input type="radio" name="ptype" value="x2"> Wider (4 + 2 per block)</label>
+      <b style="margin-left:18px">Ranking</b>
+      <label class="check"><input type="radio" name="prank" value="v" checked> Value first</label>
+      <label class="check"><input type="radio" name="prank" value="w"> Win chance first</label>
+    </div>
+    <div class="tiles" id="p-tiles"></div>
+    <p class="note" id="p-note"></p>
+    <p class="note" id="p-pool"></p>
+    <div class="controls">
+      <label><span>Base stake (<span class="cu">units</span>)</span> <input type="number" id="p-base" value="1" step="0.5" min="0.1"></label>
+      <label><span>Loss carried (<span class="cu">units</span>)</span> <input type="number" id="p-carried" value="0" step="0.5" min="0" title="Your running loss in the progression. The wager column recovers it plus one base stake."></label>
+      <label class="check"><input type="checkbox" id="p-rec"> Recommended only</label>
+      <button class="sec" id="p-csv">Download CSV</button>
+    </div>
+    <div class="tablewrap"><table id="p-table"></table></div>
+    <div id="p-extras"></div>
+    <div id="p-flags"></div>
+    <h3 style="margin:18px 0 6px">Record</h3>
+    <div id="p-record"></div>
+    <h3 style="margin:18px 0 6px">Rankings compared</h3>
+    <div id="p-compare"></div>
+    <h3 style="margin:18px 0 6px">Recent picks</h3>
+    <div class="tablewrap"><table id="p-history"></table></div>
+  </section>
+
+  <section id="tab-chase" hidden>
+    <div class="controls">
+      <b>Game type</b>
+      <label class="check"><input type="radio" name="ctype" value="all" checked> All types</label>
+      <label class="check"><input type="radio" name="ctype" value="q"> Quarter</label>
+      <label class="check"><input type="radio" name="ctype" value="h1"> Half</label>
+      <label class="check"><input type="radio" name="ctype" value="total"> Over/under</label>
+      <label class="check"><input type="radio" name="ctype" value="ml"> Full game</label>
+      <label class="check" title="Tracked beside the live slate from 2026-11-21: every market, each block keeps its 4 best by value and recommends its 2 likeliest winners."><input type="radio" name="ctype" value="x2"> Wider (4 + 2 per block)</label>
+      <b style="margin-left:18px">Ranking</b>
+      <label class="check"><input type="radio" name="crank" value="v" checked> Value first</label>
+      <label class="check"><input type="radio" name="crank" value="w"> Win chance first</label>
+    </div>
+    <div class="tiles" id="ch-tiles"></div>
+    <h3 style="margin:14px 0 6px">To date</h3>
+    <div class="tiles" id="ch-stats"></div>
+    <div id="ch-cmp"></div>
+    <p class="note" id="ch-note"></p>
+    <div class="controls">
+      <label><span>Base stake (<span class="cu">units</span>)</span> <input type="number" id="ch-base" value="1" step="0.5" min="0.1"></label>
+      <label><span>Largest wager (<span class="cu">units</span>)</span> <input type="number" id="ch-cap" placeholder="no limit" min="0" step="1" title="A wager larger than this is placed at this amount (partial recovery) or skipped, as chosen in the box beside it."></label>
+      <label title="When the wager the loss needs is over the largest wager, bet the largest wager and recover only part of the loss if it wins. Unticked, the pick is skipped and the loss stays carried."><input type="checkbox" id="ch-part" checked> Bet the limit when a wager is over it</label>
+      <label>Start from <input type="date" id="ch-from" title="Replay from the first pick on or after this day, with no loss carried in. Leave empty to start with the first recorded pick."></label>
+      <button class="sec" id="ch-csv">Download CSV</button>
+    </div>
+    <div class="controls" id="ch-rules">
+      <label title="While a loss is carried, only picks that pass these rules are bet; the rest are skipped and the loss stays carried. With no loss carried, every pick is bet."><input type="checkbox" id="ch-rec" checked> Recovery rules while a loss is carried</label>
+      <label>Win chance at least (%) <input type="number" id="ch-rp" value="55" step="1" min="0" max="100"></label>
+      <label title="While a loss is carried, a pick priced below this is skipped and the loss waits for a better price. A short price makes the next wager large. Slide fully left for no minimum.">Price from <input type="range" id="ch-rmin" min="1" max="2.2" step="0.05" value="1.50"> <b id="ch-rmin-v"></b></label>
+      <label>Price to <input type="number" id="ch-rmax" value="2.20" step="0.05"></label>
+      <label title="Not applied to moneyline picks: their win chance is the market price and uses no team history.">Team games at least <input type="number" id="ch-rt" value="30" step="5" min="0"></label>
+      <label title="Sweep warning on the team backed: 2 = it lost the first three quarters in two or more of its last ten games as favourite; 1 = one or more; 0 = ignore the warning.">Skip sweep warning level <input type="number" id="ch-rw" value="2" step="1" min="0" max="2"></label>
+      <label title="Moneyline picks only. Skip a pick when the team backed has a win share this season at least this many points below its opponent's (both teams need 5 or more games in the league). The game-winner model does not use team records, so this guards against backing the team the standings say is worse. 0 = off.">Skip moneyline if record is worse by (win % points) <input type="number" id="ch-rg" value="15" step="5" min="0" max="100"></label>
+    </div>
+    <!-- BANK PROTECTION (what-if). To remove it, delete everything from here to the end marker below; the code that reads it does nothing when it is missing. -->
+    <div class="controls" id="ch-bank-box">
+      <label title="Tries the replay with a bank behind it: stakes are a percentage of the starting bank, only part of a carried loss is staked each time, a loss that gets too big is written off, and a stop-loss drops to flat stakes when the bank is down. Off, the replay is exactly as above."><input type="checkbox" id="ch-bk"> Bank protection (what-if)</label>
+      <label><span>Starting bank (<span class="cu">units</span>)</span> <input type="number" id="ch-bank" value="2500" step="100" min="1"></label>
+      <label title="The base stake each bet is meant to earn, as a percentage of the starting bank. Replaces the Base stake box above while this is on.">Base stake (% of bank) <input type="number" id="ch-bpct" value="0.5" step="0.1" min="0.01"></label>
+      <label title="The largest wager, as a percentage of the starting bank. Replaces the Largest wager box above while this is on. 0 = no limit.">Largest wager (% of bank) <input type="number" id="ch-capp" value="3" step="0.5" min="0"></label>
+      <label title="Each wager stakes this share of the carried loss plus the base stake, so only that share is chased at a time. 100 = the whole loss, as in the normal replay.">Recover share (%) <input type="number" id="ch-rshare" value="33" step="5" min="1" max="100"></label>
+      <label title="When the loss carried grows past this percentage of the starting bank it is written off (taken as lost) and the next wager starts from the base stake again. 0 = never.">Write off loss at (% of bank) <input type="number" id="ch-wo" value="4" step="0.5" min="0"></label>
+      <label title="When the bank falls to this percentage of the starting bank, the carried loss is dropped and flat base stakes are placed until the bank recovers. 0 = never.">Stop-loss at (% of start) <input type="number" id="ch-stop" value="75" step="5" min="0" max="100"></label>
+      <label title="Normal wagering resumes when the bank is back to this percentage of the starting bank.">Resume at (% of start) <input type="number" id="ch-resume" value="90" step="5" min="0"></label>
+    </div>
+    <!-- END BANK PROTECTION -->
+    <div class="chart" style="max-width:720px;margin-bottom:12px"><h3>Running total (<span class="cu">units</span>)</h3><div id="c-chase"></div></div>
+    <h3 style="margin:14px 0 6px">By day</h3>
+    <div class="tablewrap"><table id="ch-days"></table></div>
+    <h3 style="margin:14px 0 6px">Every bet</h3>
+    <div class="tablewrap"><table id="ch-table"></table></div>
+  </section>
+
+  <section id="tab-board" hidden>
+    <div class="panel">
+      <div class="grid" id="b-controls">
+        <label>Market <select id="b-market"></select></label>
+        <label>Day <select id="b-date"></select></label>
+        <label>League <select id="b-league"></select></label>
+        <label>Minimum value (EV %) <input type="number" id="b-minev" value="3" step="0.5" title="A selection needs at least this expected return per unit staked, at the Bet365 price."></label>
+        <label>League games needed <input type="number" id="b-minl" value="150" min="0" title="Decided periods in this league's history for the market."></label>
+        <label>Team games needed <input type="number" id="b-mint" value="15" min="0" title="The smaller of the two teams' histories for the market."></label>
+        <label>Price from <input type="number" id="b-pmin" value="1.30" step="0.05"></label>
+        <label>Price to <input type="number" id="b-pmax" value="3.00" step="0.05"></label>
+        <label><span>Base stake (<span class="cu">units</span>)</span> <input type="number" id="b-base" value="1" step="0.5" min="0.1"></label>
+        <label><span>Loss carried (<span class="cu">units</span>)</span> <input type="number" id="b-carried" value="0" step="0.5" min="0" title="Your running loss in the progression. The wager column recovers it plus one base stake."></label>
+        <label><span>Wager limit (<span class="cu">units</span>)</span> <input type="number" id="b-cap" value="50" min="1"></label>
+        <label class="check"><input type="checkbox" id="b-picks"> Selections only</label>
+        <label class="check"><input type="checkbox" id="b-excl"> Show excluded</label>
+      </div>
+    </div>
+    <div class="tiles" id="b-tiles"></div>
+    <p class="note" id="b-note"></p>
+    <div class="controls">
+      <button class="sec" id="b-reset">Reset sort</button>
+      <button class="sec" id="b-csv">Download CSV</button>
+    </div>
+    <div class="tablewrap"><table id="b-table"></table></div>
+    <details class="panel">
+      <summary><b>Rules: model weights and trust</b></summary>
+      <p class="note">Each upcoming selection starts from the bookmaker's no-margin probability (Pinnacle's for the game winner, Bet365's own for quarters and halves). The model then moves it by <i>trust</i> times its fitted view, never by more than the limit shown. Weight multipliers scale each fitted component (1 = as fitted, 0 = off). Trust comes from how the model did against Bet365 prices so far and is re-set at each daily build.</p>
+      <div class="grid" id="b-rules">
+        <label>Trust: quarters <input type="number" id="b-tq" step="0.05" min="0" max="1"></label>
+        <label>Trust: first half <input type="number" id="b-th" step="0.05" min="0" max="1"></label>
+        <label>Trust: game winner <input type="number" id="b-tm" step="0.05" min="0" max="1"></label>
+        <label>Venue (home/away) <input type="number" id="b-m0" value="1" step="0.25" min="0"></label>
+        <label>Overall record <input type="number" id="b-m1" value="1" step="0.25" min="0"></label>
+        <label>Last ten <input type="number" id="b-m2" value="1" step="0.25" min="0"></label>
+        <label>Head to head <input type="number" id="b-m3" value="1" step="0.25" min="0"></label>
+        <label>Weekday / weekend <input type="number" id="b-m4" value="1" step="0.25" min="0"></label>
+      </div>
+      <div class="controls" style="margin-top:8px"><button class="sec" id="b-defaults">Back to built values</button><span class="note" id="b-limit"></span></div>
+    </details>
+    <details class="panel"><summary><b>Model check</b></summary><div id="b-check"></div></details>
+    <details class="panel"><summary><b>Pick ledger</b></summary><div id="b-ledger"></div></details>
+  </section>
+
+  <section id="tab-leagues" hidden>
+    <div class="controls">
+      <label>Minimum games <input type="number" id="l-min" value="30" min="1" style="width:90px"></label>
+      <button class="sec" id="l-reset">Reset sort</button>
+      <button class="sec" id="l-csv">Download CSV</button>
+    </div>
+    <p class="note" id="l-note"></p>
+    <div class="tablewrap"><table id="l-table"></table></div>
+  </section>
+
+  <section id="tab-teams" hidden>
+    <div class="controls">
+      <label>League <select id="t-league"></select></label>
+      <label>Minimum games <input type="number" id="t-min" value="20" min="1" style="width:90px"></label>
+      <button class="sec" id="t-reset">Reset sort</button>
+      <button class="sec" id="t-csv">Download CSV</button>
+    </div>
+    <p class="note">Win % counts the team's own quarter wins over all its games, ties included. After-loss % is the share of wins in the quarter after a quarter loss (ties skipped). Streaks run in date order and a tie ends both.</p>
+    <div class="tablewrap"><table id="t-table"></table></div>
+  </section>
+
+  <section id="tab-strategy" hidden>
+    <div class="panel">
+      <div class="grid" id="s-controls">
+        <label>Pick
+          <select id="s-rule">
+            <option value="home">Home team</option>
+            <option value="away">Away team</option>
+            <option value="form">Team with the better record so far</option>
+            <option value="fav" data-odds>Favourite (lower Bet365 price)</option>
+            <option value="dog" data-odds>Underdog (higher Bet365 price)</option>
+          </select>
+        </label>
+        <label>Price <select id="s-pricemode"><option value="fixed">Fixed price (below)</option><option value="book" data-odds>Bet365 price</option></select></label>
+        <label><span>Fixed price (<span class="ou">decimal</span>)</span> <input type="number" id="s-price" value="1.90" step="0.01" min="1.01"></label>
+        <label>Price from <input type="number" id="s-pmin" step="0.01" placeholder="any"></label>
+        <label>Price to <input type="number" id="s-pmax" step="0.01" placeholder="any"></label>
+        <label>If the quarter is tied
+          <select id="s-tie"><option value="push">Stake returned (2-way market)</option><option value="lose">Bet loses (3-way market)</option></select>
+        </label>
+        <label>Stake after a loss
+          <select id="s-prog">
+            <option value="recover">Recover all losses plus one unit</option>
+            <option value="principal">One unit plus the lost principal</option>
+            <option value="flat">Flat, one unit</option>
+          </select>
+        </label>
+        <label><span>Base stake (<span class="cu">units</span>)</span> <input type="number" id="s-base" value="1" step="0.5" min="0.1"></label>
+        <label><span>Wager limit (<span class="cu">units</span>)</span> <input type="number" id="s-cap" value="50" min="1"></label>
+        <label>Step limit (losses in a row) <input type="number" id="s-steps" value="6" min="0" title="After this many losses in a row the cycle is written off and starts again. 0 = no limit."></label>
+        <label>Days <select id="s-days"><option value="all">All</option><option value="weekday">Monday to Friday</option><option value="weekend">Saturday and Sunday</option></select></label>
+        <label>Minutes between bets <input type="number" id="s-gap" value="20" min="0" title="A bet is taken only if it starts at least this long after the previous one."></label>
+        <label>Games of record needed <input type="number" id="s-form" value="10" min="1"></label>
+        <label>League <select id="s-league"></select></label>
+        <label class="check"><input type="checkbox" id="s-testonly"> Test period only</label>
+        <label class="check"><input type="checkbox" id="s-screen"> Pick leagues from the "before" period</label>
+        <label>Screen: games <input type="number" id="s-sgames" value="30" min="1"></label>
+        <label>Screen: win rate % <input type="number" id="s-srate" value="52" min="1" max="99"></label>
+      </div>
+    </div>
+    <div id="s-warn"></div>
+    <div class="tiles" id="s-tiles"></div>
+    <div class="charts">
+      <div class="chart"><h3>Running profit and loss (<span class="cu">units</span>)</h3><div id="c-equity"></div></div>
+      <div class="chart"><h3>Losing runs: how many times each length occurred</h3><div id="c-runs"></div></div>
+    </div>
+    <p class="note" id="s-note"></p>
+  </section>
+
+  <section id="tab-games" hidden>
+    <div class="controls">
+      <button class="sec" id="g-reset">Reset sort</button>
+      <button class="sec" id="g-csv">Download CSV</button>
+      <label class="check"><input type="checkbox" id="g-all"> Show every row</label>
+    </div>
+    <p class="note" id="g-note"></p>
+    <div class="tablewrap"><table id="g-table"></table></div>
+  </section>
+
+  <section id="tab-jeff" hidden>
+    <div class="panel">
+      <h3 style="margin:0 0 6px">Jeffs comment</h3>
+      <p class="note">Jeff: please write any suggestions, questions or comments about the system, 200 words at most. David will read them and send you a reply.</p>
+      <div id="j-form"></div>
+    </div>
+  </section>
+
+  <section id="tab-report" hidden>
+    <div class="panel no-print">
+      <div class="controls" style="margin:0">
+        <label class="check"><input type="checkbox" class="r-sec" value="settings" checked> Settings and data</label>
+        <label class="check"><input type="checkbox" class="r-sec" value="leagues" checked> Leagues</label>
+        <label class="check"><input type="checkbox" class="r-sec" value="teams" checked> Teams</label>
+        <label class="check"><input type="checkbox" class="r-sec" value="strategy" checked> Strategy results</label>
+        <label class="check"><input type="checkbox" class="r-sec" value="games"> Game list</label>
+        <button class="act" id="r-build">Build report</button>
+        <button class="sec" id="r-print">Print or save as PDF</button>
+      </div>
+    </div>
+    <div id="report"></div>
+  </section>
+</main>
+<div id="tip"></div>
+<script src="stats.js?v=20261128161353"></script>
+<script src="app.js?v=20261128161353"></script>
+</body>
+</html>
